@@ -10,11 +10,23 @@ app.post('/create-payment-intent', async (req, res) => {
 
     var totalPrice = 0.0;
     var db = admin.firestore();
-    var snapshot = db.collection("users").doc(userId).get();
-    snapshot.data().cart.items.forEach(element => {
-        var snapshot2 = db.collection("products").doc(element.productDocumentId).get();
-        totalPrice += snapshot2.data().priceInYen * element.quantity;
-    });
+
+    console.log('userId: ' + userId);
+
+    var snapshot = await db.collection("users").doc(userId).get();
+    console.log('name: ' + snapshot.data().name);
+
+    var cartItems = snapshot.data().cart.items;
+    for (index = 0; index < cartItems.length; index++) {
+        var element = cartItems[index];
+        console.log('productDocumentId: ' + element.productDocumentId);
+        var snapshot2 = await db.collection("products").doc(element.productDocumentId).get();
+        console.log('priceInYen: ' + snapshot2.data().priceInYen);
+        console.log(typeof snapshot2.data().priceInYen);
+        console.log('quantity: ' + element.stockRequest.quantity);
+        console.log(typeof element.stockRequest.quantity);
+        totalPrice += snapshot2.data().priceInYen * element.stockRequest.quantity;
+    }
 
     console.log('price: ' + totalPrice);
 
