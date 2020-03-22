@@ -4,12 +4,13 @@ admin.initializeApp();
 const stripe = require('stripe')(functions.config().stripe.token);
 const express = require('express');
 const app = express();
+const fcm = admin.messaging();
+var db = admin.firestore();
 
 app.post('/create-payment-intent', async (req, res) => {
     const { userId, paymentMethodId } = req.body;
 
     var totalPrice = 0.0;
-    var db = admin.firestore();
 
     console.log('userId: ' + userId);
 
@@ -46,3 +47,46 @@ app.post('/create-payment-intent', async (req, res) => {
 });
 
 exports.createPaymentIntent = functions.https.onRequest(app);
+
+exports.sendToDevice = functions.firestore
+    .document('orders/{orderId}')
+    .onCreate((snap, context) => {
+        const order = snap.data();
+
+        const payload = {
+            notification: {
+                title: '注文完了のお知らせ',
+                body: order.pushNotificationMessage,
+                click_action: 'FLUTTER_NOTIFICATION_CLICK'
+            }
+        };
+        console.log('Created payload' + payload);
+
+        return db.collection('users').where('role', '==', 0).get().then(querySnapshot => {
+
+            querySnapshot.forEach(doc => {
+                var adminUserId = doc.data().email;
+                console.log('Got admin: ' + adminUserId);
+
+                db.collection('users').doc(adminUserId).collection('tokens').get().then(querySnapshot1 => {
+
+                    console.log('got tokens for: ' + doc.data().email);
+
+                    let tokens = querySnapshot1.docs.map(qsnap => qsnap.id);
+
+                    for (let index = 0; index < tokens.length; index++) {
+                        const element = tokens[index];
+
+                        fcm.sendToDevice(element, payload).then(response => {
+                            console.log('Sent notifications for ' + element);
+                            return null;
+                        }).catch();
+                    }
+
+                    return null;
+                }).catch();
+            })
+
+            return null;
+        }).catch();
+    });
