@@ -48,14 +48,14 @@ app.post('/create-payment-intent', async (req, res) => {
 
 exports.createPaymentIntent = functions.https.onRequest(app);
 
-exports.sendToDevice = functions.firestore
+exports.newOrderPlaced = functions.firestore
     .document('orders/{orderId}')
     .onCreate((snap, context) => {
         const order = snap.data();
 
         const payload = {
             notification: {
-                title: '注文完了のお知らせ',
+                title: '発注のお知らせ',
                 body: order.pushNotificationMessage,
                 click_action: 'FLUTTER_NOTIFICATION_CLICK'
             }
@@ -89,4 +89,48 @@ exports.sendToDevice = functions.firestore
 
             return null;
         }).catch();
+    });
+
+// Order Status
+// 1  pending
+// 2  dispatched
+// 3  delivered
+// 4  cancelledByCustomer
+// 5  deletedByAdmin
+exports.orderDispatched = functions.firestore
+    .document('orders/{orderId}')
+    .onUpdate((change, context) => {
+        const orderNewValue = change.after.data();
+        const orderPreviousValue = change.before.data();
+        if (orderPreviousValue.status === 1 && orderNewValue.status === 2) {
+            const payload = {
+                notification: {
+                    title: '注文完了のお知らせ',
+                    body: 'ただ今注文を承りました。発送までしばらくお待ちください。',
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK'
+                }
+            };
+            console.log('Created payload' + payload);
+
+            // Send notification to customer that their order has been dispatched
+            return db.collection('users').doc(orderNewValue.customerId).collection('tokens').get().then(querySnapshot1 => {
+
+                console.log('got tokens for customer: ' + orderNewValue.customerId);
+
+                let tokens = querySnapshot1.docs.map(qsnap => qsnap.id);
+
+                for (let index = 0; index < tokens.length; index++) {
+                    const element = tokens[index];
+
+                    fcm.sendToDevice(element, payload).then(response => {
+                        console.log('Sent notifications that their order is dispatched for ' + element);
+                        return null;
+                    }).catch();
+                }
+
+                return null;
+            }).catch();
+        }
+
+        return null;
     });
