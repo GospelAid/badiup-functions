@@ -58,6 +58,9 @@ exports.newOrderPlaced = functions.firestore
                 title: '発注のお知らせ',
                 body: order.pushNotificationMessage,
                 click_action: 'FLUTTER_NOTIFICATION_CLICK'
+            },
+            data: {
+                orderDocumentId: snap.id
             }
         };
         console.log('Created payload' + payload);
