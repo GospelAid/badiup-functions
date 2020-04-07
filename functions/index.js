@@ -53,18 +53,6 @@ exports.newOrderPlaced = functions.firestore
     .onCreate((snap, context) => {
         const order = snap.data();
 
-        const payload = {
-            notification: {
-                title: '発注のお知らせ',
-                body: order.pushNotificationMessage,
-                click_action: 'FLUTTER_NOTIFICATION_CLICK'
-            },
-            data: {
-                orderDocumentId: snap.id
-            }
-        };
-        console.log('Created payload' + payload);
-
         return db.collection('users').where('role', '==', 0).get().then(querySnapshot => {
 
             querySnapshot.forEach(doc => {
@@ -79,8 +67,18 @@ exports.newOrderPlaced = functions.firestore
 
                     for (let index = 0; index < tokens.length; index++) {
                         const element = tokens[index];
+                        const payload = {
+                            notification: {
+                                title: '発注のお知らせ',
+                                body: order.pushNotificationMessage
+                            },
+                            data: {
+                                orderDocumentId: snap.id
+                            },
+                            token: element
+                        };
 
-                        fcm.sendToDevice(element, payload).then(response => {
+                        fcm.send(payload).then(response => {
                             console.log('Sent notifications for ' + element);
                             return null;
                         }).catch();
@@ -106,15 +104,6 @@ exports.orderDispatched = functions.firestore
         const orderNewValue = change.after.data();
         const orderPreviousValue = change.before.data();
         if (orderPreviousValue.status === 1 && orderNewValue.status === 2) {
-            const payload = {
-                notification: {
-                    title: '注文完了のお知らせ',
-                    body: 'ただ今注文を承りました。発送までしばらくお待ちください。',
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK'
-                }
-            };
-            console.log('Created payload' + payload);
-
             // Send notification to customer that their order has been dispatched
             return db.collection('users').doc(orderNewValue.customerId).collection('tokens').get().then(querySnapshot1 => {
 
@@ -124,8 +113,18 @@ exports.orderDispatched = functions.firestore
 
                 for (let index = 0; index < tokens.length; index++) {
                     const element = tokens[index];
+                    const payload = {
+                        notification: {
+                            title: '注文完了のお知らせ',
+                            body: 'ただ今注文を承りました。発送までしばらくお待ちください。'
+                        },
+                        data: {
+                            orderDocumentId: change.after.id
+                        },
+                        token: element
+                    };
 
-                    fcm.sendToDevice(element, payload).then(response => {
+                    fcm.send(payload).then(response => {
                         console.log('Sent notifications that their order is dispatched for ' + element);
                         return null;
                     }).catch();
@@ -136,4 +135,64 @@ exports.orderDispatched = functions.firestore
         }
 
         return null;
+    });
+
+exports.newProductPublished = functions.firestore
+    .document('products/{productId}')
+    .onWrite((change, context) => {
+        const product = change.after.exists ? change.after.data() : null;
+
+        if (product === null) {
+            console.log('Product does not exist. Exiting...');
+            return null;
+        }
+
+        if (!product.isPublished) {
+            console.log('Product still in draft state. Exiting...');
+            return null;
+        }
+
+        if (change.before.exists && change.before.data().isPublished) {
+            console.log('Product already in published state. Exiting...');
+            return null;
+        }
+
+        // Send notification to all customers
+        return db.collection('users').where('role', '==', 1).get().then(querySnapshot => {
+
+            querySnapshot.forEach(doc => {
+                var customerUserId = doc.data().email;
+                console.log('Got customer: ' + customerUserId);
+
+                db.collection('users').doc(customerUserId).collection('tokens').get().then(querySnapshot1 => {
+
+                    console.log('got tokens for: ' + doc.data().email);
+
+                    let tokens = querySnapshot1.docs.map(qsnap => qsnap.id);
+
+                    for (let index = 0; index < tokens.length; index++) {
+                        const element = tokens[index];
+                        const payload = {
+                            notification: {
+                                title: '新製品のお知らせ',
+                                body: product.name + 'が新入荷(^^)/ 詳しくはコチラから♪'
+                            },
+                            data: {
+                                productDocumentId: change.after.id
+                            },
+                            token: element
+                        };
+
+                        fcm.send(payload).then(response => {
+                            console.log('Sent notifications for ' + element);
+                            return null;
+                        }).catch();
+                    }
+
+                    return null;
+                }).catch();
+            })
+
+            return null;
+        }).catch();
     });
