@@ -29,6 +29,9 @@ app.post('/create-payment-intent', async (req, res) => {
         totalPrice += snapshot2.data().priceInYen * element.stockRequest.quantity;
     }
 
+    var shippingCost = totalPrice < 5000 ? 500 : 0;
+    totalPrice = totalPrice + shippingCost;
+
     console.log('price: ' + totalPrice);
 
     const paymentIntent = await stripe.paymentIntents.create({
