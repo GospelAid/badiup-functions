@@ -6,6 +6,7 @@ const express = require('express');
 const app = express();
 const fcm = admin.messaging();
 var db = admin.firestore();
+const https = require('https');
 
 app.post('/create-payment-intent', async (req, res) => {
     const { userId, paymentMethodId } = req.body;
@@ -49,7 +50,40 @@ app.post('/create-payment-intent', async (req, res) => {
     });
 });
 
-exports.createPaymentIntent = functions.https.onRequest(app);
+// GET /postcodes/{postcode}
+// Get address from postcode
+app.get('/postcodes/:postcode', async (req, res) => {
+    const addressPostcode = req.params.postcode;
+
+    console.log(`Fetching address for given postcode: "${addressPostcode}"`);
+
+    var options = {
+        host: 'apis.postcode-jp.com',
+        path: `/api/v3/postcodes?apikey=${functions.config().postcode.api_key}&postcode=${addressPostcode}`,
+        method: 'GET'
+    };
+
+    try {
+        let rawData = '';
+        https.request(options, function (res1) {
+            console.log('STATUS: ' + res1.statusCode);
+            console.log('HEADERS: ' + JSON.stringify(res1.headers));
+            res1.setEncoding('utf8');
+            res1.on('data', function (chunk) {
+                console.log('BODY: ' + chunk);
+                rawData += chunk;
+            });
+            res1.on('end', () => {
+                return res.status(200).json(rawData);
+            })
+        }).end();
+    } catch (error) {
+        console.log('Error getting address for postcode', addressPostcode, error.message);
+        return res.sendStatus(500);
+    }
+});
+
+exports.api = functions.https.onRequest(app);
 
 exports.newOrderPlaced = functions.firestore
     .document('orders/{orderId}')
