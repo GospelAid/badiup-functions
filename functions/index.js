@@ -152,8 +152,8 @@ exports.orderDispatched = functions.firestore
                     const element = tokens[index];
                     const payload = {
                         notification: {
-                            title: '注文完了のお知らせ',
-                            body: 'ただ今注文を承りました。発送までしばらくお待ちください。'
+                            title: '商品発送のお知らせ',
+                            body: '商品を発送しました。到着までしばらくお待ち下さい。'
                         },
                         data: {
                             orderDocumentId: change.after.id
